@@ -5,19 +5,15 @@
 
 #TODO
 # --> add option to fit tensor in one shell only
+# add option to provide brainmask
 
 set -e # The script will terminate after the first line that fails
-
-#only internal to MARTINOS!!! need to fix
-export FREESURFER_HOME=/usr/local/freesurfer/7.3.0
-source $FREESURFER_HOME/SetUpFreeSurfer.sh
-source /usr/pubsw/packages/mrtrix/env.sh 
 
 ####### Help Function ###############################
 Help()
 {
 echo "This script performs a QA check of your dMRI data"
-echo "Add description"
+echo ""
 echo "Script assume bvec and bval to be named as data"
 echo "If not. provide path to bvec and bval files"
 echo "Syntax: $0 -i dmri_data [-e|o|b|r|h]"
@@ -32,12 +28,12 @@ echo "b   path to bval file"
 echo "g   performs MRtrix gradients check"
 echo "s   provide subject id"
 echo "f   specify threshold for WM mask. Default=0.2"
-echo "q	  specify location group QC outputs"
+echo "q	  specify directory group QC outputs"
 }
 ######## Checking args ###############################
 NO_ARGS=0
 if [ $# -eq "$NO_ARGS" ]; then
-    echo "ERROR: you must provide dMRI original data"
+    echo "ERROR: you must provide dMRI data"
     echo "USAGE: $0 -h for help"
     exit 1
 fi
@@ -65,7 +61,7 @@ while getopts "he:o:b:r:i:gs:q:f:" option; do
 	   s) #Provide subj id
 	      subjid=${OPTARG};;
 	   q) #Enter path to group dataframes
-	      fgrpq=${OPTARG};;
+	      fgrp=${OPTARG};;
 	   f) #Threshold WM mask
 	      thr=${OPTARG};;
   	esac
@@ -75,6 +71,27 @@ codedir=`realpath $0`
 codedir=`dirname $codedir`
 echo $codedir
 #########################################################
+################### Check FSL/FS/MRTRIX #################
+if ! command -v mrinfo &> /dev/null; then
+                echo "WARNING: MRtrix commands not found."
+                exit 1
+else
+        echo MRTRIX version  `mrinfo -version | head -n 1`
+fi
+
+if [ ! -e "$FREESURFER_HOME" ]; then
+         echo "Warning: freesurfer has not been properly sourced" 
+         echo "Some steps might not complete"
+fi
+
+if [ ! -e "$FSLDIR" ]; then
+         echo "ERROR: FSL has not been properly installed" 
+         exit 1
+else
+        echo "FSL version `flirt -v | head -n 1`"
+fi
+################################################### 
+
 ############# Check original data ########################
 echo "############# dMRI data ############################"
 if [[ $data ]]; then
@@ -100,6 +117,7 @@ fi
 wdir=`pwd`
 if [[ $outdir ]]; then
 	outdir=`realpath $outdir`
+	echo "Outdir is $outdir"
 	if [[ ! -d $outdir ]]; then
 		echo "ERROR: Output directory does not exist"
 		exit 1
@@ -150,7 +168,7 @@ fi
 nbval=`wc -l $bval | awk '{print $1}'`
 nbvec=`wc -l $bvec | awk '{print $1}'`
 if [[ $nbval == 1 ]]; then #rows
-	cmd="$codedir/row2col.sh $bval $outdir/bvals"
+	cmd="$codedir/utils/row2col.sh $bval $outdir/bvals"
 	echo ${cmd}; eval ${cmd}
  	echo ${cmd} >> $LF
 	nbval=`wc -l $outdir/bvals | awk '{print $1}'`
@@ -162,7 +180,7 @@ if [[ $nbval -ne $dim4 ]]; then
 fi
 
 if [[ $nbvec == 3 ]]; then #rows
-        cmd="$codedir/row2col.sh  $bvec $outdir/bvecs"
+        cmd="$codedir/utils/row2col.sh  $bvec $outdir/bvecs"
 		echo ${cmd}; eval ${cmd}
  		echo ${cmd} >> $LF
         nbvec=`wc -l $outdir/bvecs | awk '{print $1}'`
@@ -173,27 +191,33 @@ if [[ $nbvec -ne $dim4 ]]; then
         exit 1
 fi
 
+bval=$outdir/bvals
+bvec=$outdir/bvecs
 ######## Creating brain mask #######################################
 echo "Creating brain mask..."
-cmd="dwiextract $data -bzero -force -fslgrad $bvec $bval $outdir/bzeros.nii.gz"
+if ! command -v dwigradcheck &> /dev/null; then
+                echo "WARNING: MRtrix command not found."
+           	exit 1
+else
+cmd="dwiextract $data -bzero -force -fslgrad $bvec $bval $outdir/tmp.bzeros.nii.gz"
 echo ${cmd}; eval ${cmd};
 echo ${cmd} >> $LF
 
-cmd="fslmaths $outdir/bzeros.nii.gz -Tmean $outdir/bzeros_tmean.nii.gz"
+cmd="fslmaths $outdir/tmp.bzeros.nii.gz -Tmean $outdir/tmp.bzeros_tmean.nii.gz"
 echo ${cmd}; eval ${cmd};
 echo ${cmd} >> $LF
 
-cmd="bet2 $outdir/bzeros_tmean.nii.gz $outdir/lowb_brain -m"
+cmd="bet2 $outdir/tmp.bzeros_tmean.nii.gz $outdir/lowb_brain -m"
 echo ${cmd}; eval ${cmd}
 echo ${cmd} >> $LF
 
 mask=$outdir/lowb_brain_mask.nii.gz
-
+fi
 ######### Run DWIGRADCHECK ###################################
 if [[ $dogradcheck ]]; then 
 	echo "Performing MRtrix grad check"
 	# Mrtrix likes them in rows and not columns....
-	cmd="$codedir/transpose_gradients.py $bval $outdir/tmp.bval_row"
+	cmd="$codedir/utils/transpose_gradients.py $bval $outdir/tmp.bval_row"
 	echo ${cmd}; eval ${cmd}
  	echo ${cmd} >> $LF
 	bval=$outdir/tmp.bval_row
@@ -207,7 +231,7 @@ if [[ $dogradcheck ]]; then
 		else
         		bvec=$bvec
 		fi		
-	cmd="$codedir/transpose_gradients.py $bvec $outdir/tmp.bvec_row"
+	cmd="$codedir/utils/transpose_gradients.py $bvec $outdir/tmp.bvec_row"
 	echo ${cmd}; eval ${cmd}
     echo ${cmd} >> $LF
 	bvec=$outdir/tmp.bvec_row
@@ -218,9 +242,8 @@ if [[ $dogradcheck ]]; then
     echo ${cmd} >> $LF
 	fi
 fi
-
-######### Run QA on original data #############################
-echo "########## Running QA on original data #################"
+######## Run DTIFIT #############################
+echo "########## Running DTIFIT #################"
 
 if [[ $subjid ]]; then 
 	subj="Subject: $subjid"
@@ -228,10 +251,7 @@ else
 	subj="Data: `basename $data`"
 fi
 
-####### DTIFIT ########
 dtidir=$outdir/dtifit
-ssdir=$outdir/screenshots
-mkdir -p $ssdir
 mkdir -p $dtidir
 
 if [[ -f $outdir/bvecs_c ]]; then
@@ -257,7 +277,7 @@ echo ${cmd} >> $LF
 ####### Run Synthseg ########################################
 if ! command -v mri_synthseg &> /dev/null; then
         echo "WARNING: FreeSurfer Synthseg command not found."
-        echo "WARNING: WM mask will be obtained from FA mask"
+        echo "WARNING: WM mask will be obtained from FA"
 	
 	if [[ $thr ]]; then
         	thr=$thr
@@ -268,37 +288,39 @@ if ! command -v mri_synthseg &> /dev/null; then
         echo ${cmd}; eval ${cmd};
         echo ${cmd} >> $LF
 else
-        cmd="mri_synthseg --i $outdir/lowb_brain.nii.gz --o $outdir/synthseg_out.nii.gz --parc --threads 5"
+	ssegdir=$outdir/synthseg
+	mkdir -p $ssegdir
+        cmd="mri_synthseg --i $outdir/lowb_brain.nii.gz --o $ssegdir/synthseg_out.nii.gz --parc --threads 5"
         echo ${cmd}; eval ${cmd}
         echo ${cmd} >> $LF
         #Extract WM mask
-        cmd="mri_extract_label $outdir/synthseg_out.nii.gz 2 41 $outdir/wm_mask.nii.gz"
+        cmd="mri_extract_label $ssegdir/synthseg_out.nii.gz 2 41 $ssegdir/wm_mask.nii.gz"
         echo ${cmd}; eval ${cmd};
         echo ${cmd} >> $LF
-        cmd="mri_convert $outdir/wm_mask.nii.gz -rl $outdir/lowb_brain.nii.gz -rt nearest $outdir/wm_mask.nii.gz "
+        cmd="mri_convert $ssegdir/wm_mask.nii.gz -rl $outdir/lowb_brain.nii.gz -rt nearest $ssegdir/wm_mask.nii.gz "
         echo ${cmd}; eval ${cmd};
         echo ${cmd} >> $LF
-        cmd="fslmaths $outdir/wm_mask.nii.gz -bin $outdir/wm_mask.nii.gz"
+        cmd="fslmaths $ssegdir/wm_mask.nii.gz -bin $outdir/wm_mask.nii.gz"
         echo ${cmd}; eval ${cmd};
         echo ${cmd} >> $LF
 
-	cmd="fslmaths $outdir/synthseg_out.nii.gz -thr 100 $outdir/cortex_mask.nii.gz"
+	cmd="fslmaths $ssegdir/synthseg_out.nii.gz -thr 100 $ssegdir/cortex_mask.nii.gz"
 	echo ${cmd}; eval ${cmd};
 	echo ${cmd} >> $LF
-	cmd="mri_convert $outdir/cortex_mask.nii.gz -rt nearest -rl $outdir/lowb_brain.nii.gz $outdir/cortex_mask.nii.gz"
+	cmd="mri_convert $ssegdir/cortex_mask.nii.gz -rt nearest -rl $outdir/lowb_brain.nii.gz $ssegdir/cortex_mask.nii.gz"
 	echo ${cmd}; eval ${cmd};
 	echo ${cmd} >> $LF
-	cmd="fslmaths $outdir/cortex_mask.nii.gz -bin $outdir/cortex_mask.nii.gz"
+	cmd="fslmaths $ssegdir/cortex_mask.nii.gz -bin $ssegdir/cortex_mask.nii.gz"
 	echo ${cmd}; eval ${cmd};
 	echo ${cmd} >> $LF
 
-	cmd="mri_extract_label $outdir/synthseg_out.nii.gz 14 15 $outdir/ventricles_mask.nii.gz"
+	cmd="mri_extract_label $ssegdir/synthseg_out.nii.gz 14 15 $ssegdir/ventricles_mask.nii.gz"
 	echo ${cmd}; eval ${cmd};
         echo ${cmd} >> $LF
-	cmd="mri_convert $outdir/ventricles_mask.nii.gz -rt nearest -rl $outdir/lowb_brain.nii.gz $outdir/ventricles_mask.nii.gz"
+	cmd="mri_convert $ssegdir/ventricles_mask.nii.gz -rt nearest -rl $outdir/lowb_brain.nii.gz $ssegdir/ventricles_mask.nii.gz"
         echo ${cmd}; eval ${cmd};
         echo ${cmd} >> $LF
-	cmd="fslmaths $outdir/ventricles_mask.nii.gz -bin $outdir/ventricles_mask.nii.gz"
+	cmd="fslmaths $ssegdir/ventricles_mask.nii.gz -bin $ssegdir/ventricles_mask.nii.gz"
         echo ${cmd}; eval ${cmd};
         echo ${cmd} >> $LF
 	
@@ -313,11 +335,11 @@ ${cmd} > $outdir/cnrwm.txt
 ######### SNR ###########
 echo "~~~~~~~~~ Computing Temporal SNR ~~~~~~~"
 
-cmd="fslmaths $outdir/bzeros.nii.gz -Tstd $outdir/bzeros_tstd.nii.gz"
+cmd="fslmaths $outdir/tmp.bzeros.nii.gz -Tstd $outdir/tmp.bzeros_tstd.nii.gz"
 echo ${cmd}; eval ${cmd};
 echo ${cmd} >> $LF
 
-cmd="fslmaths $outdir/bzeros_tmean.nii.gz -div $outdir/bzeros_tstd.nii.gz $outdir/bzeros_snr.nii.gz"
+cmd="fslmaths $outdir/tmp.bzeros_tmean.nii.gz -div $outdir/tmp.bzeros_tstd.nii.gz $outdir/bzeros_snr.nii.gz"
 echo ${cmd}; eval ${cmd};
 echo ${cmd} >> $LF
 
@@ -327,12 +349,15 @@ echo ${cmd} >> $LF
 ${cmd} > $outdir/tsnr_orig.txt
 
 ########## TAKE SCREENSHOTS ###################
+ssdir=$outdir/screenshots
+mkdir -p $ssdir
+
 if ! command -v freeview &> /dev/null; then
         echo "WARNING: freeview command not found."
 	echo "screenshots will not be taken"
 else
 	#I think the following only if mrtrix env is sourced
-	cmd="env -u LD_LIBRARY_PATH sh $codedir/qc_screenshots.sh $outdir $data"
+	cmd="env -u LD_LIBRARY_PATH sh $codedir/utils/qc_screenshots.sh $outdir $data"
 	if [[ $eddyout ]]; then
 		cmd="$cmd $eddydir"
 	fi
@@ -340,8 +365,37 @@ else
 	echo ${cmd} >> $LF
 fi
 
-######## CREATE PDF DTI/GRAD/SNR  ###############
+######## CREATE PDF DTIFIT/GRAD/SNR/SIGNAL  ###############
 #create PDF and dataframe for dti/gradient/snr qc
+pdfdir=$outdir/reports
+mkdir -p $pdfdir
+
+pdfout=$pdfdir/qc.pdf
+# Assigning group QC directory output #
+        if [[ $fgrp ]]; then
+                fgrp=`realpath $fgrp`
+                if [[ -d $fgrp ]]; then
+                        echo "Group dataframes will be saved in $fgrp"
+                        fgrp=$fgrp
+                else
+                        echo "Warning: path to group dataframes directory inexistent"
+                        echo "Group dataframes will be saved in $pdfdir"
+                        fgrp=$pdfdir
+                fi
+        else    
+                echo "Path to group QC not specified. Output will be saved in $pdfdir"
+                fgrp=$pdfdir
+        fi      
+
+fgrpq=$fgrp/group_dti,snr.txt
+wm=$outdir/wm_mask.nii.gz
+
+cmd="python $codedir/plotting/noeddyqc.py $outdir $subjid $pdfout $fgrpq $wm $bval $data"
+if [[ -d $ssegdir ]]; then
+	cmd="$cmd --gm_mask $ssegdir/cortex_mask.nii.gz --csf_mask $ssegdir/ventricles_mask.nii.gz"
+fi
+echo ${cmd}; eval ${cmd};
+echo ${cmd} >> $LF
 
 ######### Run QA on EDDY Outputs ############################
 if [[ $eddyout ]]; then
@@ -360,28 +414,28 @@ if [[ $eddyout ]]; then
         fres_rms=`echo $eddyout/*.eddy_restricted_movement_rms`
         fparams=`echo $eddyout/*.eddy_parameters`
         dim3=`fslinfo $data | grep -w "dim3" | awk '{print $2}'`
-	pdf_output=$outdir/qc_motion.pdf
+	pdf_output=$pdfdir/qc_motion.pdf
 
 	# Assigning group QC directory output #
 	if [[ $fgrp ]]; then
 		fgrp=`realpath $fgrp`
 		if [[ -d $fgrp ]]; then
+			echo "Group dataframes will be saved in $fgrp"
 			fgrp=$fgrp
 		else
 			echo "Warning: path to group dataframes directory inexistent"
-			echo "Group dataframes will be saved in $outdir"
-			fgrp=$outdir
+			echo "Group dataframes will be saved in $pdfdir"
+			fgrp=$pdfdir
 		fi
 	else	
-		echo "Path to group QC not specified. Output will be saved in $outdir"
-		fgrp=$outdir
+		echo "Path to group QC not specified. Output will be saved in $pdfdir"
+		fgrp=$pdfdir
 	fi	
 	fgrpm=$fgrp/group_motion.txt
-	fgrq=$fgrp/group_eddyoutliers.txt
-        fgrd=$fgrp/group_dti,snr.txt
+	fgrpo=$fgrp/group_eddyoutliers.txt
 
         echo "nslices is $dim3"
-        cmd="python $codedir/qc_motion.py $fs2v $frms $fres_rms $fparams $dim3 $bvalc $subjid $pdf_output $fgrpm"
+        cmd="python $codedir/plotting/qc_motion.py $fs2v $frms $fres_rms $fparams $dim3 $bvalc $subjid $pdf_output $fgrpm"
         echo ${cmd}; eval ${cmd};
         echo ${cmd} >> $LF
 
@@ -393,8 +447,8 @@ if [[ $eddyout ]]; then
 		echo "WARNING: Eddy residuals file not found. Specify --residuals when running Eddy"
 		echo "Residuals plot omitted by QC" 
 	fi
+	pdf_output=$pdfdir/qc_outliers.pdf
 
-	######### SNR EDDY ###########
 	cnrmaps=`echo $eddyout/*.eddy_cnr_maps.nii.gz`
 	if [[ ! -f $cnrmaps ]]; then
         	echo "WARNING: CNR maps not found in eddy output dir. Specify cnr_maps when running Eddy"
@@ -403,11 +457,22 @@ if [[ $eddyout ]]; then
     		cmd="fslstats -t $cnrmaps -k $mask -n -m -s"
     		echo ${cmd}; eval ${cmd};
     		echo ${cmd} >> $LF
-    		${cmd} > $outdir/cnr_maps.txt
+    		${cmd} > $outdir/eddy_cnr_maps.txt
+		cnr_eddy=$outdir/eddy_cnr_maps.txt
 	fi
 
-	cmd="python $codedir/qc_ol.py $ol_file $ol_std_file"
-
+	cmd="python $codedir/plotting/qc_ol.py $ol_file $ol_std_file $fparams $bvalc $mask $subjid $pdf_output $fgrpo"
+	if [[ -f $res_file ]]; then
+		cmd="$cmd --eddy_res $res_file"
+	else
+                echo "WARNING: Eddy residuals file not found. Specify --residuals when running Eddy"
+                echo "Residuals plot omitted by QC" 
+        fi
+	if [[ -f $cnrmaps ]]; then
+		cmd="$cmd --cnr_eddy $cnr_eddy"
+	fi
+	echo ${cmd}; eval ${cmd};
+        echo ${cmd} >> $LF
 else
         echo "Eddy directory not provided"
         echo "QA will not include motion and eddy qa"

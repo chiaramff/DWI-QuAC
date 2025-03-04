@@ -4,7 +4,6 @@ This repository contains scripts to run QC assessment of your diffusion MRI data
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
-- [Running DWi-QuAC](#running-the-pre-processing-gui)
 - [Usage Instructions](#usage-instructions)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)

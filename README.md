@@ -22,6 +22,7 @@ This repository contains scripts to run QC assessment of your diffusion MRI data
 Ensure FREESURFER environment is properly sourced:
 source $FREESURFER_HOME/SetUpFreeSurfer.sh
 
+## Usage instructions
 
 
 ## Acknowledgements

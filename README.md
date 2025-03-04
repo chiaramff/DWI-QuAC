@@ -1,6 +1,8 @@
 # DWI-QuAC
 This repository contains scripts to run QC assessment of your diffusion MRI data and plot results into pdf files. 
 
+![screenshot](examples/qc_example.png)
+
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)

@@ -21,7 +21,7 @@ Ensure FREESURFER environment is properly sourced:
 source $FREESURFER_HOME/SetUpFreeSurfer.sh
 
 ## Usage instructions
-
+```bash
 This script performs a QA check of your dMRI data
 
 Script assume bvec and bval to be named as data
@@ -42,11 +42,11 @@ Options:
 -q	  specify directory group QC outputs
 
 Usage: dwiqa.sh -i input -r bvecs -b bvals
+```
 
-If no output directory is specified, a folder named dwi_qa is created in the current directory
-If no eddy directory folder is provided, only one report is created that includes SNR measures and DTIFIT results.
+If no output directory is specified, a folder named dwi_qa is created in the current directory.\
+If no eddy directory folder is provided, only one report is created that includes SNR measures and DTIFIT results.\
 If an eddy directory folder is provided, two additional reports are created that report eddy qc measures.
 
 ## Acknowledgements
 Thanks to the development teams of Freesurfer, MRtrix3, and Miniforge3.
-Special appreciation to the contributors who have made this pipeline possible.

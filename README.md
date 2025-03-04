@@ -5,7 +5,6 @@ This repository contains scripts to run QC assessment of your diffusion MRI data
 
 - [Prerequisites](#prerequisites)
 - [Usage Instructions](#usage-instructions)
-- [License](#license)
 - [Acknowledgements](#acknowledgements)
 
 ## Prerequisites

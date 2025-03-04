@@ -19,7 +19,7 @@ This repository contains scripts to run QC assessment of your diffusion MRI data
 - **Nibabel** > 5.2.1
 - **Pandas** > 2.1.4
 
-Ensure FREESURFER environment is properly sourced:
+Ensure FREESURFER environment is properly sourced:\
 source $FREESURFER_HOME/SetUpFreeSurfer.sh
 
 ## Usage instructions

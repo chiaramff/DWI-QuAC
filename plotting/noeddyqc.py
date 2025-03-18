@@ -100,7 +100,8 @@ ax4.tick_params(axis='both',which='both',length=0);
 # FA Histograms 
 ax5 = fig.add_subplot(gs[1,2:3])
 ax5.hist(fa[wm>0], histtype='stepfilled', alpha = 0.3, ec='k', label='WM', bins = 100, color = 'b')
-ax5.hist(fa[gm>0], histtype='stepfilled', alpha = 0.3, ec='k', label='GM', bins = 100, color = 'g')
+if args.gm_mask:
+ ax5.hist(fa[gm>0], histtype='stepfilled', alpha = 0.3, ec='k', label='GM', bins = 100, color = 'g')
 ax5.set_xlim(0,1)
 ax5.annotate('WM:'+str("{:.2f}".format(np.abs(np.mean(fa[wm>0]))))+'(+/-'+str("{:.2f}".format(np.abs(np.std(fa[wm>0]))))+')',
                  (0.0, ax5.get_ylim()[1]/2), fontsize = 9)
@@ -109,7 +110,8 @@ ax5.set_title('FA', fontsize=9)
 # MD Histograms 
 ax6 = fig.add_subplot(gs[1,3:4])
 ax6.hist(md[wm>0], histtype='stepfilled', alpha = 0.3, ec='k', label='WM', bins = 100, color = 'b')
-ax6.hist(md[gm>0], histtype='stepfilled', alpha = 0.3, ec='k', label='GM', bins = 100, color = 'g')
+if args.gm_mask:
+ ax6.hist(md[gm>0], histtype='stepfilled', alpha = 0.3, ec='k', label='GM', bins = 100, color = 'g')
 ax6.ticklabel_format(style='sci', axis = 'x', scilimits = (0,0))
 ax6.set_xlim(0,md.max())
 ax6.annotate('WM:'+str("{:.2e}".format(np.abs(np.mean(md[wm>0]))))+'(+/-'+str("{:.2e}".format(np.abs(np.std(md[wm>0]))))+')',
